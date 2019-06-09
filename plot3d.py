@@ -12,20 +12,24 @@ mycontours = glob.glob(contourdir+'/*.jpg')
 #pts3x = np.empty((29))
 #pts3y = np.empty((29))
 
-fig = plt.figure(figsize=(30,30))
+fig = plt.figure(figsize=(100,100))
 ax = fig.add_subplot(2,2,1,projection='3d')
 
 for idx, fname in enumerate(mycontours):
     img = cv2.imread(fname)
-    pts3x = np.array([])
-    pts3y = np.array([])
+    ppx = []
+    ppy = []
     for i in range(1023):
         for k in range(1023):
             if img[i][k][0] != 255:
-                np.append(pts3x,i)
-                np.append(pts3y,k)
+                ppx.append(i)
+                ppy.append(k)
+    pts3x = np.array(ppx)
+    pts3y = np.array(ppy)
+    print(fname)
     print(len(pts3x))
     print(len(pts3y))
-    ax.scatter(pts3x, pts3y, zs=idx, zdir='y', s=20, c='b')
+    ax.scatter(pts3x, pts3y, zs=idx, zdir='z', s=1, c='b', depthshade=False)
 
-plt.show()
+    plt.show()
+    break
