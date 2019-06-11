@@ -17,7 +17,7 @@ ax = fig.add_subplot(2,2,1,projection='3d')
 
 for idx, fname in enumerate(mycontours):
     print(fname[10:14])
-    if fname[10:14] != 'draw':
+    if not 'z005' in fname:
         continue
     img = cv2.imread(fname)
     ppx = []
@@ -32,8 +32,8 @@ for idx, fname in enumerate(mycontours):
     print(fname)
     print(len(pts3x))
     print(len(pts3y))
-#    ax.scatter(pts3x, pts3y, zs=idx, zdir='z', s=1, c='b', depthshade=False)
-    ax.plot(pts3x, pts3y, zs=idx, label=fname)
+    ax.scatter(pts3x, pts3y, zs=idx, zdir='z', s=1, c='b', depthshade=False)
+#    ax.plot(pts3x, pts3y, zs=idx, label=fname)
 
     plt.show()
     break
