@@ -13,6 +13,7 @@ contourdir = "contour"
 myslices = glob.glob(slicedir+'/*.png')
 for idx, fname in enumerate(myslices):
     im = cv2.imread(fname)
+    print(fname)
     nameg = graydir+fname[len(slicedir):]
     nameg = nameg.replace('.png','.jpg')
     namet = threshdir+fname[len(slicedir):]
@@ -50,6 +51,13 @@ for idx, fname in enumerate(myslices):
 #        boundRect[i] = cv2.boundingRect(contours_poly[i])
 #        centers[i], radius[i] = cv2.minEnclosingCircle(contours_poly[i])
 
+    contained_points = []
+    for j in range(8, 1023, 16):
+        for k in range(8, 1023, 16):
+            for i in range(1,len(contours)):
+                if cv2.pointPolygonTest(contours[i],(j,k), False)==1:
+                    contained_points.append([j,k])
+                    break
     # Draw contours
     for i in range(len(contours)):
         color = (0, 255, 0)
@@ -59,9 +67,11 @@ for idx, fname in enumerate(myslices):
         #  (int(boundRect[i][0]+boundRect[i][2]), int(boundRect[i][1]+boundRect[i][3])), color, 1)
         #cv2.circle(blank_image, (int(centers[i][0]), int(centers[i][1])), int(radius[i]), color, 1)        
         #cv2.circle(blank_image, (int(mc[i][0]), int(mc[i][1])), 1, color, -1)
+    for pp in contained_points:
+        cv2.circle(blank_image,(pp[0],pp[1]), 2, color,-1)
 ###########
 # definisco una griglia di punti
-# per ogni punto vedo se e' in un contorno con pointPolygonTest e tengo solo quelli dentro
+# per ogni punto vedo se e' in un contorno con pointPolygonTest e tengo solo quelli dentro. Problema: contorni che corrispondono a 'buchi' delle maglie
 # poi provo a collegare un punto con tutti quelli nel suo intorno e vedo se le rette intersecano i bordi
 # se non li intersecano le tengo e sono i miei archi
 # (questo potrei farlo anche fra 2 immagini consecutive).
