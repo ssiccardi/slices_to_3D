@@ -27,6 +27,7 @@ for idx, fname in enumerate(myslices):
 ###    save "thresholded" image in order to check how it looks like
     cv2.imwrite(namet, thresh)
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    #print(hierarchy)
     blank_image = np.zeros((thresh.shape[0], thresh.shape[1], 3), np.uint8)
     blank_image[:,:] = (255,255,255)
     #cv2.drawContours(blank_image, contours, -1, (0,0,0), 2)
@@ -52,10 +53,44 @@ for idx, fname in enumerate(myslices):
 #        centers[i], radius[i] = cv2.minEnclosingCircle(contours_poly[i])
 
     contained_points = []
-    for j in range(8, 1023, 16):
-        for k in range(8, 1023, 16):
+    for j in range(8, 1023, 8):
+        for k in range(8, 1023, 8):
+            adding=False
             for i in range(1,len(contours)):
+                if hierarchy[0][i][3] != 0:
+                # only contours htat are just under the main one
+                    continue
                 if cv2.pointPolygonTest(contours[i],(j,k), False)==1:
+                    #print(hierarchy[0][i],i)
+                    adding = True
+                    if hierarchy[0][i][2] != -1:
+                    # if the contour has a hole inside, I check that the point is not in the hole
+                        son = hierarchy[0][i][2]
+                        #print(hierarchy[0][son],son,"s")
+                        if cv2.pointPolygonTest(contours[son],(j,k), False)==1:
+                            #print("son")
+                            adding = False
+                            break
+                        else:
+                            if hierarchy[0][son][2] != -1:
+                            # if the contour has a hole inside, I check that the point is not in the hole
+                                grandson = hierarchy[0][son][2]
+                                #print(grandson)
+                                if cv2.pointPolygonTest(contours[grandson],(j,k), False)==1:
+                                    #print("grandson")
+                                    adding = False
+                                    break
+                            if hierarchy[0][son][0] != -1:
+                            # if the contour has a hole inside, I check that the point is not in the hole
+                                grandson = hierarchy[0][son][0]
+                                while grandson != -1:
+                                    #print(grandson)
+                                    if cv2.pointPolygonTest(contours[grandson],(j,k), False)==1:
+                                        #print("brother")
+                                        adding = False
+                                        break
+                                    grandson = hierarchy[0][grandson][0]
+                if adding == True:
                     contained_points.append([j,k])
                     break
     # Draw contours
@@ -82,3 +117,4 @@ for idx, fname in enumerate(myslices):
 
 ###    save contour image to build 3D image
     cv2.imwrite(namec, blank_image)
+    #break   # only 1 image to debug!
