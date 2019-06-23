@@ -106,12 +106,16 @@ for idx, fname in enumerate(myslices):
         cv2.circle(blank_image,(pp[0],pp[1]), 2, color,-1)
 ###########
 # definisco una griglia di punti
-# per ogni punto vedo se e' in un contorno con pointPolygonTest e tengo solo quelli dentro. Problema: contorni che corrispondono a 'buchi' delle maglie
+# per ogni punto vedo se e' in un contorno con pointPolygonTest e tengo solo quelli dentro. 
+# Problema: contorni che corrispondono a 'buchi' delle maglie. Risolto quasi per tutti i casi (da controllare sistematicamente)
 # poi provo a collegare un punto con tutti quelli nel suo intorno e vedo se le rette intersecano i bordi
 # se non li intersecano le tengo e sono i miei archi
 # (questo potrei farlo anche fra 2 immagini consecutive).
 # Pero' se il cammino fra due punti e' curvo 'buca' i bordi e non lo troverei.
-# Oppure guardo come sono fatti i contorni
+# Oppure: 
+# - faccio una prima elaborazione con una soglia più alta e trovo i nodi (di solito sono piu chiari)
+# - poi faccio una seconda elaborazione con soglia come ora e verifico se i cammini tra i nodi che ho trovato ci sono effettivamente
+# - poi passo al problema delle immagini consecutive
 ###########
 
 
