@@ -4,23 +4,12 @@ from optparse import OptionParser
 import math
 import random as rng
 ######################
-# Reads an image, applies a laplacian, perform distance transform and watershed
-#  see https://docs.opencv.org/3.4/d2/dbd/tutorial_distance_transform.html
+# 
 #
-# - Laplace transformation, saved as contourdir/example1.jpg
-# - applies threshold, saved as contourdir/example2.jpg
-# - applies distance transform, saved as contourdir/example3.jpg
-# - applies threshold again, saved as contourdir/example4.jpg
-# - finds markers, saved as contourdir/example5.jpg
-# - performs watershed, saved in contourdir/example6.jpg and example7.jpg
-#
-# Second elaboration, from original contours
-# - finds contours, saved as contourdir/example8.jpg, example8b.jpg
-# - find lines, saved as contourdir/example8c.jpg
-# - applies distance transform, saved as contourdir/example9.jpg
-# - applies threshold to dst transformed, saved as contourdir/example10.jpg
-# - finds markers, saved as contourdir/example11.jpg
-# - performs watershed, saved in contourdir/example12.jpg and example13.jpg
+# - Blurs image, saved as contourdir/test1.jpg
+# - applies threshold, finds contours and draws diagonals of rectangles, saved as contourdir/test2.jpg
+# - computes approximated (poly) contours, saved as contourdir/test2b.jpg
+# - finds points in poly contours (one each 8 pixels), saved as contourdir/test3.jpg, test3b.jpg (shrinked)
 #
 # Parameters
 # -I image name in slices directory
@@ -169,11 +158,16 @@ cv2.imwrite(contourdir+'test2b.jpg', blank_imageb)
 blank_image2 = np.zeros((thresh2.shape[0], thresh2.shape[1], 3), np.uint8)
 blank_image2[:,:] = (255,255,255)
 
-print("Finding contained points (test3.jpg)")
+short_image = np.zeros((256, 256, 3), np.uint8)
+short_image[:,:] = (255,255,255)
 
+print("Finding contained points (test3.jpg, test3b.jpg)")
+jj = 0
+kk = 0
 contained_points = []
-for j in range(8, 1023, 64):
-    for k in range(8, 1023, 64):
+for j in range(8, 1023, 8):
+    kk = 0
+    for k in range(8, 1023, 8):
         adding=False
         for i in range(1,len(contours2)):
             if hierarchy2[0][i][3] != 0:
@@ -206,11 +200,14 @@ for j in range(8, 1023, 64):
                     break
             if adding == True:
                 contained_points.append([j,k,i])
+                short_image[jj][kk] = (0,0,0)
                 break
+        kk = kk + 2
+    jj = jj + 2
 # Draw contours
-for i in range(len(contours2)):
-    color = (0, 255, 0)
-    cv2.drawContours(blank_image2, contours2, i, (0,0,0),1)
+#for i in range(len(contours2)):
+#    color = (0, 255, 0)
+#    cv2.drawContours(blank_image2, contours2, i, (0,0,0),1)
 i = contained_points[0][2]
 color = (rng.randint(0,256), rng.randint(0,256), rng.randint(0,256))
 for pp in contained_points:
@@ -218,5 +215,7 @@ for pp in contained_points:
         i = pp[2]
         color = (rng.randint(0,256), rng.randint(0,256), rng.randint(0,256))
     cv2.circle(blank_image2,(pp[0],pp[1]), 2, color,-1)
+#    short_image[int(pp[0]/8), int(pp[1]/8)] = (0,0,0)
 cv2.imwrite(contourdir+'test3.jpg', blank_image2)
-
+#cv2.imwrite(contourdir+'test3b.jpg', cv2.cvtColor(short_image, cv2.COLOR_BGR2GRAY))
+cv2.imwrite(contourdir+'test3b.jpg', short_image)
