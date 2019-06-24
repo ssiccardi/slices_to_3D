@@ -52,7 +52,10 @@ else:
 fname=optlist.fname
 
 print("Original Image "+fname)
-src = cv2.imread(slicedir+fname+'.png')
+img = cv2.imread(slicedir+fname+'.png')
+kernel = np.ones((5,5),np.float32)/25
+src = cv2.filter2D(img,-1,kernel)
+
 print("Applying Laplace transform (example1.jpg)")
 
 kernel = np.array([[1, 1, 1], [1, -8, 1], [1, 1, 1]], dtype=np.float32)
@@ -159,7 +162,9 @@ cv2.imwrite(contourdir+'example7.jpg', dst)
 # I try on the contours
 
 print("Finding contours (example8.jpg, example8b.jpg)")
-src = cv2.imread(slicedir+fname+'.png')
+img = cv2.imread(slicedir+fname+'.png')
+kernel = np.ones((5,5),np.float32)/25
+src = cv2.filter2D(img,-1,kernel)
 
 imgray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
 
@@ -249,8 +254,9 @@ cv2.imwrite(contourdir+'example11.jpg', markers1)
 
 print("Drawing circles in markers (example11b.jpg, example11c.jpg)")
 print(contours1[0])
-src8c = cv2.imread(contourdir+'example8c.jpg')
+src8c = cv2.imread(contourdir+'example8.jpg')
 
+nodes = []
 for i in range(len(contours1)):
     mask = np.zeros((markers1.shape[0], markers1.shape[1]), dtype=np.ubyte)
     cv2.drawContours(mask,contours1,i,1,cv2.FILLED)
@@ -258,6 +264,30 @@ for i in range(len(contours1)):
     #cv2.drawContours(src, contours1, i, (255,255,255), -1)
     cv2.circle(src, maxLoc, int(maxVal)+1,(0,255,0),1)
     cv2.circle(src8c, maxLoc, int(maxVal)+1,(255,0,0),1)
+    nodes.append(maxLoc)
+for i in range(len(nodes)):
+    for k in range(i+1,len(nodes)):
+    ## how to find a path between two nodes, without going out of the white mask?
+        midi = (int((nodes[i][0]+nodes[k][0])*0.5),int((nodes[i][1]+nodes[k][1])*0.5))
+        midi2 = (int((nodes[i][0]+midi[0])*0.5),int((nodes[i][1]+midi[1])*0.5))
+        midi3 = (int((midi[0]+nodes[k][0])*0.5),int((midi[1]+nodes[k][1])*0.5))
+        #cv2.circle(src8c, midi, 2,(255,0,0),1)
+        #cv2.circle(src8c, midi2, 2,(255,0,0),1)
+        #cv2.circle(src8c, midi3, 2,(255,0,0),1)
+        a11 = src8c[int(midi[0]),int(midi[1]),1]
+        a21 = src8c[int(midi2[0]),int(midi2[1]),1]
+        a31 = src8c[int(midi3[0]),int(midi3[1]),1]
+        a10 = src8c[int(midi[0]),int(midi[1]),0]
+        a20 = src8c[int(midi2[0]),int(midi2[1]),0]
+        a30 = src8c[int(midi3[0]),int(midi3[1]),0]
+        a12 = src8c[int(midi[0]),int(midi[1]),2]
+        a22 = src8c[int(midi2[0]),int(midi2[1]),2]
+        a32 = src8c[int(midi3[0]),int(midi3[1]),2]
+        if (a11 == 255) and (a21 == 255) and (a31 == 255) and (a10 == 255) and (a20 == 255) and (a30 == 255) and (a12 == 255) and (a22 == 255) and (a32 == 255):
+            cv2.circle(src8c, midi, 2,(255,0,0),1)
+            cv2.circle(src8c, midi2, 2,(255,0,0),1)
+            cv2.circle(src8c, midi3, 2,(255,0,0),1)
+            cv2.line(src8c,nodes[i],nodes[k],(255,0,0),1)
 cv2.imwrite(contourdir+'example11b.jpg', src)
 cv2.imwrite(contourdir+'example11c.jpg', src8c)
 
