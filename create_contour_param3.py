@@ -158,8 +158,8 @@ cv2.imwrite(contourdir+'test2b.jpg', blank_imageb)
 blank_image2 = np.zeros((thresh2.shape[0], thresh2.shape[1], 3), np.uint8)
 blank_image2[:,:] = (255,255,255)
 
-short_image = np.zeros((256, 256, 3), np.uint8)
-short_image[:,:] = (255,255,255)
+short_image = np.zeros((128, 128, 3), np.uint8)
+#short_image[:,:] = (255,255,255)
 
 print("Finding contained points (test3.jpg, test3b.jpg)")
 jj = 0
@@ -200,10 +200,10 @@ for j in range(8, 1023, 8):
                     break
             if adding == True:
                 contained_points.append([j,k,i])
-                short_image[jj][kk] = (0,0,0)
+                short_image[kk][jj] = (255,255,255)
                 break
-        kk = kk + 2
-    jj = jj + 2
+        kk = kk + 1
+    jj = jj + 1
 # Draw contours
 #for i in range(len(contours2)):
 #    color = (0, 255, 0)
@@ -219,3 +219,17 @@ for pp in contained_points:
 cv2.imwrite(contourdir+'test3.jpg', blank_image2)
 #cv2.imwrite(contourdir+'test3b.jpg', cv2.cvtColor(short_image, cv2.COLOR_BGR2GRAY))
 cv2.imwrite(contourdir+'test3b.jpg', short_image)
+
+print("Computing Hough lines on contoured image (test4.jpg)")
+short_image2_u = cv2.cvtColor(short_image, cv2.COLOR_BGR2GRAY)
+lines2 =  cv2.HoughLinesP(short_image2_u,1,np.pi/60,4,4,0) # un po' di linee con min=5, max=1
+short_image2 = np.zeros((128, 128, 3), np.uint8)
+short_image2[:,:] = (255,255,255)
+
+if lines2 is not None:
+    print("Found %s Lines" % len(lines2))
+    for y in lines2:
+        x=y[0]
+        cv2.line(short_image2,(x[0],x[1]),(x[2],x[3]),(0,0,0),1)
+cv2.imwrite(contourdir+'test4.jpg',short_image2)
+
