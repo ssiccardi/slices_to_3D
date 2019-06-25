@@ -265,40 +265,94 @@ for i in range(len(contours1)):
     cv2.circle(src, maxLoc, int(maxVal)+1,(0,255,0),1)
     cv2.circle(src8c, maxLoc, int(maxVal)+1,(255,0,0),1)
     nodes.append(maxLoc)
+totlines = []
+toler = 2
+print("Nodi %s" % len(nodes))
+xxx = 0
+yyy = 0
 for i in range(len(nodes)):
     for k in range(i+1,len(nodes)):
+        xxx = xxx+1
     ## how to find a path between two nodes, without going out of the white mask?
     ## ADD some other middel points to avoid bridging two contours
     ## TRY also elliptial curves if no straight lines can do
-        midi = (int((nodes[i][0]+nodes[k][0])*0.5),int((nodes[i][1]+nodes[k][1])*0.5))
-        midi2 = (int((nodes[i][0]+midi[0])*0.5),int((nodes[i][1]+midi[1])*0.5))
-        midi3 = (int((midi[0]+nodes[k][0])*0.5),int((midi[1]+nodes[k][1])*0.5))
-        #cv2.circle(src8c, midi, 2,(255,0,0),1)
-        #cv2.circle(src8c, midi2, 2,(255,0,0),1)
-        #cv2.circle(src8c, midi3, 2,(255,0,0),1)
-#        a11 = src8c[int(midi[0]),int(midi[1]),1]
-#        a21 = src8c[int(midi2[0]),int(midi2[1]),1]
-#        a31 = src8c[int(midi3[0]),int(midi3[1]),1]
-#        a10 = src8c[int(midi[0]),int(midi[1]),0]
-#        a20 = src8c[int(midi2[0]),int(midi2[1]),0]
-#        a30 = src8c[int(midi3[0]),int(midi3[1]),0]
-#        a12 = src8c[int(midi[0]),int(midi[1]),2]
-#        a22 = src8c[int(midi2[0]),int(midi2[1]),2]
-#        a32 = src8c[int(midi3[0]),int(midi3[1]),2]
-        a11 = src8c[int(midi[1]),int(midi[0]),1]
-        a21 = src8c[int(midi2[1]),int(midi2[0]),1]
-        a31 = src8c[int(midi3[1]),int(midi3[0]),1]
-        a10 = src8c[int(midi[1]),int(midi[0]),0]
-        a20 = src8c[int(midi2[1]),int(midi2[0]),0]
-        a30 = src8c[int(midi3[1]),int(midi3[0]),0]
-        a12 = src8c[int(midi[1]),int(midi[0]),2]
-        a22 = src8c[int(midi2[1]),int(midi2[0]),2]
-        a32 = src8c[int(midi3[1]),int(midi3[0]),2]
-        if (a11 == 255) and (a21 == 255) and (a31 == 255) and (a10 == 255) and (a20 == 255) and (a30 == 255) and (a12 == 255) and (a22 == 255) and (a32 == 255):
-            cv2.circle(src8c, midi, 2,(0,255,0),1)
-            cv2.circle(src8c, midi2, 2,(0,255,0),1)
-            cv2.circle(src8c, midi3, 2,(0,255,0),1)
-            cv2.line(src8c,nodes[i],nodes[k],(0,255,255),1)
+        dd = math.sqrt(math.pow(nodes[i][0]-nodes[k][0],2)+math.pow(nodes[i][1]-nodes[k][1],2))
+        nx = math.floor(dd/16)
+        lineok = True
+        midi_nodes = []
+        if nx > 0:
+            yyy = yyy + 1
+            if nodes[i][0] > nodes[k][0]:
+                inx = nodes[k][0]
+                dx = (nodes[i][0] - nodes[k][0])/nx
+            else:
+                inx = nodes[i][0]
+                dx = (nodes[k][0] - nodes[i][0])/nx
+            if nodes[i][1] > nodes[k][1]:
+                iny = nodes[k][1]
+                dy = (nodes[i][1] - nodes[k][1])/nx
+            else:
+                iny = nodes[i][1]
+                dy = (nodes[k][1] - nodes[i][1])/nx
+            for iix in range(nx):
+                midi = (int(inx+dx*(iix+1)), int(iny+dy*(iix+1)))
+#                midi = (int(iny+dy*iix),int(inx+dx*iix))
+                midi_nodes.append(midi)
+                # test that points on the line are in the contour, with tolerance
+                found = False
+                for iir in range(-toler, toler+1):
+                    for iis in range(-toler, toler+1):
+                        a10 = src8c[midi[1]+iir,midi[0]+iis,0]
+                        a11 = src8c[midi[1]+iir,midi[0]+iis,1]
+                        a12 = src8c[midi[1]+iir,midi[0]+iis,2]
+                        if (a10 == 255) and (a11 == 255) and (a12 == 255):
+                        # at least one point in the neighbour belongs to the contour
+                            found = True
+                            break
+                    if found == True:
+                        break
+                if found == False:
+                # NO points of the neighbor belong to the contour: discard the line
+                    lineok = False
+                    break
+        if lineok == True:
+            cv2.line(src8c,nodes[i],nodes[k],(0,0,255),2)
+            for m in midi_nodes:
+                cv2.circle(src8c, m, 2,(0,255,0),-1)
+            totlines.append({'p1': nodes[i], 'p2': nodes[k], 'len': dd})
+print(xxx)
+print(yyy)
+print("Found %s lines" % len(totlines))
+
+#        midi = (int((nodes[i][0]+nodes[k][0])*0.5),int((nodes[i][1]+nodes[k][1])*0.5))
+#        midi2 = (int((nodes[i][0]+midi[0])*0.5),int((nodes[i][1]+midi[1])*0.5))
+#        midi3 = (int((midi[0]+nodes[k][0])*0.5),int((midi[1]+nodes[k][1])*0.5))
+#        #cv2.circle(src8c, midi, 2,(255,0,0),1)
+#        #cv2.circle(src8c, midi2, 2,(255,0,0),1)
+#        #cv2.circle(src8c, midi3, 2,(255,0,0),1)
+##        a11 = src8c[int(midi[0]),int(midi[1]),1]
+##        a21 = src8c[int(midi2[0]),int(midi2[1]),1]
+##        a31 = src8c[int(midi3[0]),int(midi3[1]),1]
+##        a10 = src8c[int(midi[0]),int(midi[1]),0]
+##        a20 = src8c[int(midi2[0]),int(midi2[1]),0]
+##        a30 = src8c[int(midi3[0]),int(midi3[1]),0]
+##        a12 = src8c[int(midi[0]),int(midi[1]),2]
+##        a22 = src8c[int(midi2[0]),int(midi2[1]),2]
+##        a32 = src8c[int(midi3[0]),int(midi3[1]),2]
+#        a11 = src8c[int(midi[1]),int(midi[0]),1]
+#        a21 = src8c[int(midi2[1]),int(midi2[0]),1]
+#        a31 = src8c[int(midi3[1]),int(midi3[0]),1]
+#        a10 = src8c[int(midi[1]),int(midi[0]),0]
+#        a20 = src8c[int(midi2[1]),int(midi2[0]),0]
+#        a30 = src8c[int(midi3[1]),int(midi3[0]),0]
+#        a12 = src8c[int(midi[1]),int(midi[0]),2]
+#        a22 = src8c[int(midi2[1]),int(midi2[0]),2]
+#        a32 = src8c[int(midi3[1]),int(midi3[0]),2]
+#        if (a11 == 255) and (a21 == 255) and (a31 == 255) and (a10 == 255) and (a20 == 255) and (a30 == 255) and (a12 == 255) and (a22 == 255) and (a32 == 255):
+#            cv2.circle(src8c, midi, 2,(0,255,0),1)
+#            cv2.circle(src8c, midi2, 2,(0,255,0),1)
+#            cv2.circle(src8c, midi3, 2,(0,255,0),1)
+#            cv2.line(src8c,nodes[i],nodes[k],(0,255,255),1)
 cv2.imwrite(contourdir+'example11b.jpg', src)
 cv2.imwrite(contourdir+'example11c.jpg', src8c)
 
