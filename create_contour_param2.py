@@ -266,7 +266,7 @@ for i in range(len(contours1)):
     cv2.circle(src8c, maxLoc, int(maxVal)+1,(255,0,0),1)
     nodes.append(maxLoc)
 totlines = []
-toler = 2
+toler = 4
 print("Nodi %s" % len(nodes))
 xxx = 0
 yyy = 0
@@ -284,15 +284,13 @@ for i in range(len(nodes)):
             yyy = yyy + 1
             if nodes[i][0] > nodes[k][0]:
                 inx = nodes[k][0]
-                dx = (nodes[i][0] - nodes[k][0])/nx
-            else:
-                inx = nodes[i][0]
-                dx = (nodes[k][0] - nodes[i][0])/nx
-            if nodes[i][1] > nodes[k][1]:
                 iny = nodes[k][1]
+                dx = (nodes[i][0] - nodes[k][0])/nx
                 dy = (nodes[i][1] - nodes[k][1])/nx
             else:
+                inx = nodes[i][0]
                 iny = nodes[i][1]
+                dx = (nodes[k][0] - nodes[i][0])/nx
                 dy = (nodes[k][1] - nodes[i][1])/nx
             for iix in range(nx):
                 midi = (int(inx+dx*(iix+1)), int(iny+dy*(iix+1)))
