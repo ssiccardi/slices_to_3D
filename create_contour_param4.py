@@ -152,6 +152,7 @@ print("Drawing circles in markers (contour/nn.jpg, contour/orig_nn.jpg)")
 #print(contours1[0])
 #src8c = cv2.imread(contourdir+'example8.jpg')
 src8c = blank_image2
+src8out = np.copy(blank_image2)
 
 nodes = []
 # - nodes: [index, z, (x,y), width, [linked to]]
@@ -162,14 +163,14 @@ for i in range(len(contours1)):
     minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(dist1a, mask)
     #cv2.drawContours(src, contours1, i, (255,255,255), -1)
     cv2.circle(src, maxLoc, int(maxVal)+1,(0,255,0),1)
-    cv2.circle(src8c, maxLoc, int(maxVal)+1,(255,0,0),1)
+    cv2.circle(src8out, maxLoc, int(maxVal)+1,(255,0,0),1)
     nodes.append([indnode,zval, maxLoc, int(maxVal), []])
     indnode = indnode + 1
 totlines = []
-toler = 4
 print("Found %s nodes" % len(nodes))
 for i in range(len(nodes)):
     for k in range(i+1,len(nodes)):
+        toler = 4
     ## how to find a path between two nodes, without going out of the white mask?
     ## ADD some other middel points to avoid bridging two contours
     ## TRY also elliptial curves if no straight lines can do
@@ -210,52 +211,65 @@ for i in range(len(nodes)):
                 # NO points of the neighbor belong to the contour: discard the line
                     lineok = False
                     break
-################## to finish
-#            if lineok == False:
-#                lineok = True
-#                circleok = True
-#                midi_nodes = []
-#                center = (int((nodes[i][2][0] - nodes[k][2][0])/2), int((nodes[i][2][1] - nodes[k][2][1])/2))
-#                for iix in range(1,10):
-#                    midi = (int(center[0]+dd/2*math.cos(iix*np.pi/9)), int(center[1]+dd/2*math.sin(iix*np.pi/9)))
-#                    midi_nodes.append(midi)
-#                    for iir in range(-toler, toler+1):
-#                        for iis in range(-toler, toler+1):
-#                            a10 = src8c[midi[1]+iir,midi[0]+iis,0]
-#                            a11 = src8c[midi[1]+iir,midi[0]+iis,1]
-#                            a12 = src8c[midi[1]+iir,midi[0]+iis,2]
-#                            if (a10 == 255) and (a11 == 255) and (a12 == 255):
-#                            # at least one point in the neighbour belongs to the contour
-#                                found = True
-#                                break
-#                        if found == True:
-#                            break
-#                    if found == False:
-#                    # NO points of the neighbor belong to the contour: discard the line
-#                        lineok = False
-#                        break
-
+################## to finish: consider also the other half of the ellipses; do not consider nodes
+#########                       that are already joined thru a third one
+            if (lineok == False) and (dd <200):
+                toler = 1
+                center = (int((nodes[i][2][0] + nodes[k][2][0])/2), int((nodes[i][2][1] + nodes[k][2][1])/2))
+                if nodes[i][2][0] == nodes[k][2][0]:
+                    alpha = np.pi/2
+                else:
+                    alpha = np.arctan((nodes[i][2][1]-nodes[k][2][1])/(nodes[i][2][0]-nodes[k][2][0]))
+                for iid in range(1,10):
+                    minax = dd/18*iid
+                    lineok = True
+                    circleok = True
+                    midi_nodes = []
+                    for iix in range(1,10):
+                        midi = (int(center[0]+dd/2*np.cos(alpha+iix*np.pi/9)), int(center[1]+minax*np.sin(alpha+iix*np.pi/9)))
+                        midi_nodes.append(midi)
+                        found = False
+                        for iir in range(-toler, toler+1):
+                            for iis in range(-toler, toler+1):
+                                a10 = src8c[midi[1]+iir,midi[0]+iis,0]
+                                a11 = src8c[midi[1]+iir,midi[0]+iis,1]
+                                a12 = src8c[midi[1]+iir,midi[0]+iis,2]
+                                if (a10 == 255) and (a11 == 255) and (a12 == 255):
+                                # at least one point in the neighbour belongs to the contour
+                                    found = True
+                                    break
+                            if found == True:
+                                break
+                        if found == False:
+                        # NO points of the neighbor belong to the contour: discard the line
+                            lineok = False
+                            circleok = False
+                            break
+                    if lineok == True:
+                        break
 
         if lineok == True:
 # - lines: [(x,y) of P1, (x,y) of P2, length, index of P1, index of P2, width]
             wline = int((nodes[k][3]+nodes[i][3])/2)
-            cv2.line(src8c,nodes[i][2],nodes[k][2],(0,0,255),1)
-            cv2.line(src,nodes[i][2],nodes[k][2],(0,255,0),1)
-            if circleok == True:
+            if circleok == False:
+                cv2.line(src8out,nodes[i][2],nodes[k][2],(0,0,255),2)
+                cv2.line(src,nodes[i][2],nodes[k][2],(0,255,0),2)
+            else:
             # FIXME: only an arc, instead of the whole circle
-                cv2.circle(src8c,center,2,(0,0,255),1)
-                cv2.circle(src,center,2,(0,255,0),1)
+                cv2.ellipse(src8out,center,(int(dd/2),int(minax)),alpha*180/np.pi,0,180,(0,0,255),2)
+                cv2.ellipse(src,center,(int(dd/2),int(minax)),alpha*180/np.pi,0,180,(0,255,0),2)
             
             nodes[i][4].append(nodes[k][0])
             nodes[k][4].append(nodes[i][0])
             for m in midi_nodes:
-                cv2.circle(src8c, m, 2,(0,255,0),-1)
+                cv2.circle(src8out, m, 2,(0,255,0),-1)
                 cv2.circle(src, m, 2,(0,255,0),-1)
             totlines.append({'p1': nodes[i][2], 'p2': nodes[k][2], 'len': dd, 'width': wline, 'ip1': nodes[i][0], 'ip2': nodes[k][0]})
 print("Found %s lines" % len(totlines))
 
 cv2.imwrite(contourdir+'orig_'+zname, src)
-cv2.imwrite(contourdir+zname, src8c)
+cv2.imwrite(contourdir+zname, src8out)
+cv2.imwrite(contourdir+'cc'+zname, src8c)
 
 print("Writing nodes and lines data to data/nn.xlt")
 
