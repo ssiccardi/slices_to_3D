@@ -157,13 +157,14 @@ src8out = np.copy(blank_image2)
 nodes = []
 # - nodes: [index, z, (x,y), width, [linked to]]
 indnode = 1
+# store nodes
 for i in range(len(contours1)):
     mask = np.zeros((markers1.shape[0], markers1.shape[1]), dtype=np.ubyte)
     cv2.drawContours(mask,contours1,i,1,cv2.FILLED)
     minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(dist1a, mask)
     #cv2.drawContours(src, contours1, i, (255,255,255), -1)
-    cv2.circle(src, maxLoc, int(maxVal)+1,(0,255,0),1)
-    cv2.circle(src8out, maxLoc, int(maxVal)+1,(255,0,0),1)
+#    cv2.circle(src, maxLoc, int(maxVal)+1,(0,255,0),1)
+#    cv2.circle(src8out, maxLoc, int(maxVal)+1,(255,0,0),1)
     nodes.append([indnode,zval, maxLoc, int(maxVal), []])
     indnode = indnode + 1
 totlines = []
@@ -175,10 +176,16 @@ for i in range(len(nodes)):
     ## ADD some other middel points to avoid bridging two contours
     ## TRY also elliptial curves if no straight lines can do
         dd = math.sqrt(math.pow(nodes[i][2][0]-nodes[k][2][0],2)+math.pow(nodes[i][2][1]-nodes[k][2][1],2))
+        minax = dd/18
         nx = math.floor(dd/16)
         lineok = True
         circleok = False
         midi_nodes = []
+        center = (int((nodes[i][2][0] + nodes[k][2][0])/2), int((nodes[i][2][1] + nodes[k][2][1])/2))
+        if nodes[i][2][0] == nodes[k][2][0]:
+            alpha = np.pi/2
+        else:
+            alpha = math.atan2(nodes[i][2][1]-nodes[k][2][1],nodes[i][2][0]-nodes[k][2][0])
         if nx > 0:
             if nodes[i][2][0] > nodes[k][2][0]:
                 inx = nodes[k][2][0]
@@ -211,22 +218,45 @@ for i in range(len(nodes)):
                 # NO points of the neighbor belong to the contour: discard the line
                     lineok = False
                     break
-################## to finish: consider also the other half of the ellipses; do not consider nodes
+################## to finish: do not consider nodes
 #########                       that are already joined thru a third one
             if (lineok == False) and (dd <200):
                 toler = 1
-                center = (int((nodes[i][2][0] + nodes[k][2][0])/2), int((nodes[i][2][1] + nodes[k][2][1])/2))
-                if nodes[i][2][0] == nodes[k][2][0]:
-                    alpha = np.pi/2
-                else:
-                    alpha = np.arctan((nodes[i][2][1]-nodes[k][2][1])/(nodes[i][2][0]-nodes[k][2][0]))
                 for iid in range(1,10):
                     minax = dd/18*iid
                     lineok = True
                     circleok = True
                     midi_nodes = []
-                    for iix in range(1,10):
-                        midi = (int(center[0]+dd/2*np.cos(alpha+iix*np.pi/9)), int(center[1]+minax*np.sin(alpha+iix*np.pi/9)))
+                    tmp_nodes = cv2.ellipse2Poly(center,(int(dd/2),int(minax)),int(alpha*180/np.pi),0,180,20)
+                    for mmm in tmp_nodes:
+                        midi = (mmm[0], mmm[1])
+                        midi_nodes.append(midi)
+                        found = False
+                        for iir in range(-toler, toler+1):
+                            for iis in range(-toler, toler+1):
+                                a10 = src8c[midi[1]+iir,midi[0]+iis,0]
+                                a11 = src8c[midi[1]+iir,midi[0]+iis,1]
+                                a12 = src8c[midi[1]+iir,midi[0]+iis,2]
+                                if (a10 == 255) and (a11 == 255) and (a12 == 255):
+                                # at least one point in the neighbour belongs to the contour
+                                    found = True
+                                    break
+                            if found == True:
+                                break
+                        if found == False:
+                        # NO points of the neighbor belong to the contour: discard the line
+                            lineok = False
+                            circleok = False
+                            break
+                    if lineok == True:
+                        break
+                    # the other half of the ellipse
+                    lineok = True
+                    circleok = True
+                    midi_nodes = []
+                    tmp_nodes = cv2.ellipse2Poly(center,(int(dd/2),int(minax)),int(alpha*180/np.pi),180,0,20)
+                    for mmm in tmp_nodes:
+                        midi = (mmm[0], mmm[1])
                         midi_nodes.append(midi)
                         found = False
                         for iir in range(-toler, toler+1):
@@ -252,24 +282,53 @@ for i in range(len(nodes)):
 # - lines: [(x,y) of P1, (x,y) of P2, length, index of P1, index of P2, width]
             wline = int((nodes[k][3]+nodes[i][3])/2)
             if circleok == False:
-                cv2.line(src8out,nodes[i][2],nodes[k][2],(0,0,255),2)
-                cv2.line(src,nodes[i][2],nodes[k][2],(0,255,0),2)
+                type = 'line'
+                leng = dd  # distance of the 2 points
+                #cv2.line(src8out,nodes[i][2],nodes[k][2],(0,0,255),2)
+                #cv2.line(src,nodes[i][2],nodes[k][2],(0,255,0),2)
             else:
-            # FIXME: only an arc, instead of the whole circle
-                cv2.ellipse(src8out,center,(int(dd/2),int(minax)),alpha*180/np.pi,0,180,(0,0,255),2)
-                cv2.ellipse(src,center,(int(dd/2),int(minax)),alpha*180/np.pi,0,180,(0,255,0),2)
+                type = 'ellipse'
+                leng = np.pi * ( 3*(dd/2+minax) - np.sqrt( (3*dd/2 + minax) * (dd/2 + 3*minax) ) ) / 2 # approxinate half perimeter
+                #cv2.ellipse(src8out,center,(int(dd/2),int(minax)),alpha*180/np.pi,0,180,(0,0,255),2)
+                #cv2.ellipse(src,center,(int(dd/2),int(minax)),alpha*180/np.pi,0,180,(0,255,0),2)
             
             nodes[i][4].append(nodes[k][0])
             nodes[k][4].append(nodes[i][0])
-            for m in midi_nodes:
-                cv2.circle(src8out, m, 2,(0,255,0),-1)
-                cv2.circle(src, m, 2,(0,255,0),-1)
-            totlines.append({'p1': nodes[i][2], 'p2': nodes[k][2], 'len': dd, 'width': wline, 'ip1': nodes[i][0], 'ip2': nodes[k][0]})
+#            for m in midi_nodes:
+#                cv2.circle(src8out, m, 2,(0,255,0),-1)
+#                cv2.circle(src, m, 2,(0,255,0),-1)
+            totlines.append({'p1': nodes[i][2], 'p2': nodes[k][2], 'len': leng, 'width': wline, 'ip1': nodes[i][0], 'ip2': nodes[k][0], 'midi': midi_nodes, 'type': type, 'center': center, 'maxax': dd/2, 'minax': minax, 'alpha':alpha, 'status': 'ok'})
 print("Found %s lines" % len(totlines))
+
+# draw nodes
+for node in nodes:
+    cv2.circle(src, node[2], node[3]+1,(0,255,0),1)
+    cv2.circle(src8out, node[2], node[3]+1,(255,0,0),1)
+# todo: delete from totlines the third edge of triangles if any. TO BE FINISHED!
+    for idson in node[4]:
+        son = next(nnn for nnn in nodes if nnn[0] == idson)
+        for idgson in son[4]:
+            if idgson in node[4]:
+                todelete = next(lll for lll in totlines if (lll['ip1'] ==node[0] and lll['ip2']==idgson) or (lll['ip2'] ==node[0] and lll['ip1']==idgson))
+                todelete['status'] = 'triang'
+
+# draw edges
+for line in totlines:
+    if line['status'] == 'triang':
+        continue
+    if line['type'] == 'line':
+        cv2.line(src8out,line['p1'],line['p2'],(0,0,255),2)
+        cv2.line(src,line['p1'],line['p2'],(0,255,0),2)
+    else:
+        cv2.ellipse(src8out,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,0,180,(0,0,255),2)
+        cv2.ellipse(src,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,0,180,(0,255,0),2)
+    for m in line['midi']:
+        cv2.circle(src8out, m, 2,(0,255,0),-1)
+        cv2.circle(src, m, 2,(0,255,0),-1)
+
 
 cv2.imwrite(contourdir+'orig_'+zname, src)
 cv2.imwrite(contourdir+zname, src8out)
-cv2.imwrite(contourdir+'cc'+zname, src8c)
 
 print("Writing nodes and lines data to data/nn.xlt")
 
@@ -305,6 +364,9 @@ worksheet.write(1,4,"Width")
 worksheet.write(1,5,"Length")
 worksheet.write(1,6,"Index of P1")
 worksheet.write(1,7,"Index of P2")
+worksheet.write(1,8,"Type")
+worksheet.write(1,9,"Status")
+
 i = 2
 for ll in totlines:
     worksheet.write(i,0,ll['p1'][1])
@@ -315,6 +377,8 @@ for ll in totlines:
     worksheet.write(i,5,ll['len'])
     worksheet.write(i,6,ll['ip1'])
     worksheet.write(i,7,ll['ip2'])
+    worksheet.write(i,8,ll['type'])
+    worksheet.write(i,9,ll['status'])
     i = i + 1
     
 #fp = io.StringIO()
