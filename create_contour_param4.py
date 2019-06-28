@@ -20,8 +20,8 @@ import xlwt
 # - finds markers and lines joining them, saved as contourdir/nn.jpg,orig_nn.jpg
 #
 # Creates structures:
-# - nodes: [index, z, (x,y), width, [linked to]]
-# - lines: [(x,y) of P1, (x,y) of P2, length, index of P1, index of P2, width]
+# - nodes: [index, z, (x,y), width, [linked to], [linked - triangles], subgraph]
+# - lines: [(x,y) of P1, (x,y) of P2, length, index of P1, index of P2, width, [intermediate points], type, paramenters forr ellipses, status, subgraph]
 # Width of a node = radius of circle centerd at the node and contained in the contour
 # Widh of a line = average width of the nodes it joins
 # Parameters
@@ -155,7 +155,7 @@ src8c = blank_image2
 src8out = np.copy(blank_image2)
 
 nodes = []
-# - nodes: [index, z, (x,y), width, [linked to]]
+# - nodes: [index, z, (x,y), width, [linked to],[linked - triangles]]
 indnode = 1
 # store nodes
 for i in range(len(contours1)):
@@ -165,7 +165,7 @@ for i in range(len(contours1)):
     #cv2.drawContours(src, contours1, i, (255,255,255), -1)
 #    cv2.circle(src, maxLoc, int(maxVal)+1,(0,255,0),1)
 #    cv2.circle(src8out, maxLoc, int(maxVal)+1,(255,0,0),1)
-    nodes.append([indnode,zval, maxLoc, int(maxVal), []])
+    nodes.append([indnode,zval, maxLoc, int(maxVal), [], [],0])
     indnode = indnode + 1
 totlines = []
 print("Found %s nodes" % len(nodes))
@@ -186,6 +186,7 @@ for i in range(len(nodes)):
             alpha = np.pi/2
         else:
             alpha = math.atan2(nodes[i][2][1]-nodes[k][2][1],nodes[i][2][0]-nodes[k][2][0])
+        versus = 1
         if nx > 0:
             if nodes[i][2][0] > nodes[k][2][0]:
                 inx = nodes[k][2][0]
@@ -218,8 +219,7 @@ for i in range(len(nodes)):
                 # NO points of the neighbor belong to the contour: discard the line
                     lineok = False
                     break
-################## to finish: do not consider nodes
-#########                       that are already joined thru a third one
+            # llok for elliptical lines if the points are not too far from each other
             if (lineok == False) and (dd <200):
                 toler = 1
                 for iid in range(1,10):
@@ -249,12 +249,13 @@ for i in range(len(nodes)):
                             circleok = False
                             break
                     if lineok == True:
+                        versus = 1
                         break
                     # the other half of the ellipse
                     lineok = True
                     circleok = True
                     midi_nodes = []
-                    tmp_nodes = cv2.ellipse2Poly(center,(int(dd/2),int(minax)),int(alpha*180/np.pi),180,0,20)
+                    tmp_nodes = cv2.ellipse2Poly(center,(int(dd/2),int(minax)),int(alpha*180/np.pi),-180,0,20)
                     for mmm in tmp_nodes:
                         midi = (mmm[0], mmm[1])
                         midi_nodes.append(midi)
@@ -276,10 +277,11 @@ for i in range(len(nodes)):
                             circleok = False
                             break
                     if lineok == True:
+                        versus = -1
                         break
 
         if lineok == True:
-# - lines: [(x,y) of P1, (x,y) of P2, length, index of P1, index of P2, width]
+# - lines: [(x,y) of P1, (x,y) of P2, length, index of P1, index of P2, width, [intermediate points], type, paramenters forr ellipses, status]
             wline = int((nodes[k][3]+nodes[i][3])/2)
             if circleok == False:
                 type = 'line'
@@ -297,22 +299,30 @@ for i in range(len(nodes)):
 #            for m in midi_nodes:
 #                cv2.circle(src8out, m, 2,(0,255,0),-1)
 #                cv2.circle(src, m, 2,(0,255,0),-1)
-            totlines.append({'p1': nodes[i][2], 'p2': nodes[k][2], 'len': leng, 'width': wline, 'ip1': nodes[i][0], 'ip2': nodes[k][0], 'midi': midi_nodes, 'type': type, 'center': center, 'maxax': dd/2, 'minax': minax, 'alpha':alpha, 'status': 'ok'})
+            totlines.append({'p1': nodes[i][2], 'p2': nodes[k][2], 'len': leng, 'width': wline, 'ip1': nodes[i][0], 'ip2': nodes[k][0], 'midi': midi_nodes, 'type': type, 'center': center, 'maxax': dd/2, 'minax': minax, 'alpha':alpha, 'versus': versus, 'status': 'ok', 'subgraph': 0})
 print("Found %s lines" % len(totlines))
 
 # draw nodes
 for node in nodes:
     cv2.circle(src, node[2], node[3]+1,(0,255,0),1)
     cv2.circle(src8out, node[2], node[3]+1,(255,0,0),1)
-# todo: delete from totlines the third edge of triangles if any. TO BE FINISHED!
+    cv2.putText(src8out,str(node[0]),node[2], cv2.FONT_HERSHEY_PLAIN, 1,(0,255,0),1,cv2.LINE_AA)
+# delete from totlines the third edge of triangles if any, setting status=triang
     for idson in node[4]:
+        if idson < node[0]:
+        # do not consider nodes before the one at hand
+            continue
         son = next(nnn for nnn in nodes if nnn[0] == idson)
         for idgson in son[4]:
+            if idgson < son[0]:
+                continue              
             if idgson in node[4]:
                 todelete = next(lll for lll in totlines if (lll['ip1'] ==node[0] and lll['ip2']==idgson) or (lll['ip2'] ==node[0] and lll['ip1']==idgson))
                 todelete['status'] = 'triang'
 
-# draw edges
+# draw edges, markers, etc. Write nodes links without triangles
+last_node = -1
+link_no_tr = []
 for line in totlines:
     if line['status'] == 'triang':
         continue
@@ -320,13 +330,59 @@ for line in totlines:
         cv2.line(src8out,line['p1'],line['p2'],(0,0,255),2)
         cv2.line(src,line['p1'],line['p2'],(0,255,0),2)
     else:
-        cv2.ellipse(src8out,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,0,180,(0,0,255),2)
-        cv2.ellipse(src,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,0,180,(0,255,0),2)
+        if line['versus'] ==1:
+            cv2.ellipse(src8out,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,0,180,(0,0,255),2)
+            cv2.ellipse(src,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,0,180,(0,255,0),2)
+        else:
+            cv2.ellipse(src8out,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,-180,0,(0,0,255),2)
+            cv2.ellipse(src,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,-180,0,(0,255,0),2)
     for m in line['midi']:
         cv2.circle(src8out, m, 2,(0,255,0),-1)
         cv2.circle(src, m, 2,(0,255,0),-1)
+    nodes[line['ip2']-1][5].append(line['ip1'])
+    if line['ip1'] != last_node:
+        if last_node != -1:
+            if link_no_tr:
+                nodes[last_node-1][5].extend(link_no_tr)
+        last_node = line['ip1']
+        link_no_tr = []
+    link_no_tr.append(line['ip2'])
+if last_node:
+    if link_no_tr:
+        nodes[last_node-1][5].extend(link_no_tr)
+# compute connected subgraphs, and store to nodes and edges. -1 means not connected to anything
 
+    
+    
+subgr = 1
+for node in nodes:
+    if not node[5]:
+        node[6] = -1
+        continue
+    if node[6] != 0:
+    # already computed from a previous node, copy to linked nodes
+        nds = []     
+        for nn in node[5]:
+            if nn > node[0]:
+                nds.append(nn)
+        while nds:
+            nds1 = []
+            for nn in nds:
+                nodes[nn-1][6] = node[6]
+                for nn1 in nodes[nn-1][5]:
+                    if (nn1 > nodes[nn-1][0] or nodes[nn1-1][6]!=node[6]) and nn1 not in nds1:
+                        nds1.append(nn1)
+            nds = nds1
+        continue
+    node[6] = subgr
+    for nn in node[5]:
+        if nn > node[0]:
+             nodes[nn-1][6] = node[6]
+    subgr = subgr+1    
 
+for line in totlines:
+    line['subgraph'] = nodes[line['ip1']-1][6]
+    
 cv2.imwrite(contourdir+'orig_'+zname, src)
 cv2.imwrite(contourdir+zname, src8out)
 
@@ -340,6 +396,8 @@ worksheet.write(1,2,"X")
 worksheet.write(1,3,"Y")
 worksheet.write(1,4,"Width")
 worksheet.write(1,5,"Is linked to")
+worksheet.write(1,6,"Excluding triangles")
+worksheet.write(1,7,"Subgraph")
 i = 2
 for nn in nodes:
     worksheet.write(i,0,nn[0])
@@ -351,11 +409,15 @@ for nn in nodes:
     for nni in nn[4]:
         ss = ss + "%s " % nni
     worksheet.write(i,5,ss)
+    ss = ""
+    for nni in nn[5]:
+        ss = ss + "%s " % nni
+    worksheet.write(i,6,ss)
+    worksheet.write(i,7,nn[6])
     i = i + 1
     
 worksheet = workbook.add_sheet('Edges')
-# - lines: [(x,y) of P1, (x,y) of P2, length, index of P1, index of P2, width]
-
+# - lines: [(x,y) of P1, (x,y) of P2, length, index of P1, index of P2, width, [intermediate points], type, paramenters for ellipses, status]
 worksheet.write(1,0,"X1")
 worksheet.write(1,1,"Y1")
 worksheet.write(1,2,"X2")
@@ -365,7 +427,8 @@ worksheet.write(1,5,"Length")
 worksheet.write(1,6,"Index of P1")
 worksheet.write(1,7,"Index of P2")
 worksheet.write(1,8,"Type")
-worksheet.write(1,9,"Status")
+worksheet.write(1,9,"Subgraph")
+worksheet.write(1,10,"Status")
 
 i = 2
 for ll in totlines:
@@ -378,7 +441,8 @@ for ll in totlines:
     worksheet.write(i,6,ll['ip1'])
     worksheet.write(i,7,ll['ip2'])
     worksheet.write(i,8,ll['type'])
-    worksheet.write(i,9,ll['status'])
+    worksheet.write(i,9,ll['subgraph'])
+    worksheet.write(i,10,ll['status'])
     i = i + 1
     
 #fp = io.StringIO()
