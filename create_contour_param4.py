@@ -8,8 +8,6 @@ import io
 import xlwt
 
 ######################
-# Reads an image, applies a laplacian, perform distance transform and watershed
-#  see https://docs.opencv.org/3.4/d2/dbd/tutorial_distance_transform.html
 #
 #
 # Elaboration:
@@ -153,6 +151,7 @@ print("Drawing circles in markers (contour/nn.jpg, contour/orig_nn.jpg)")
 #src8c = cv2.imread(contourdir+'example8.jpg')
 src8c = blank_image2
 src8out = np.copy(blank_image2)
+src8out[src8out<10] = 102  # gray backgroud for easier reading
 
 nodes = []
 # - nodes: [index, z, (x,y), width, [linked to],[linked - triangles]]
@@ -306,7 +305,7 @@ print("Found %s lines" % len(totlines))
 for node in nodes:
     cv2.circle(src, node[2], node[3]+1,(0,255,0),1)
     cv2.circle(src8out, node[2], node[3]+1,(255,0,0),1)
-    cv2.putText(src8out,str(node[0]),node[2], cv2.FONT_HERSHEY_PLAIN, 1,(0,255,0),1,cv2.LINE_AA)
+    cv2.putText(src8out,str(node[0]),node[2], cv2.FONT_HERSHEY_PLAIN, 1,(0,0,0),1,cv2.LINE_AA)
 # delete from totlines the third edge of triangles if any, setting status=triang
     for idson in node[4]:
         if idson < node[0]:
