@@ -16,7 +16,8 @@ import xlwt
 # - finds contours
 # - applies distance transform, saved as gray/nn.jpg
 # - applies threshold to dst transformed, saved as thresh/nn.jpg
-# - finds markers and lines joining them, saved as contourdir/nn.jpg,orig_nn.jpg
+# - finds markers and lines (straight lines + ellipses) joining them, saved as contourdir/nn.jpg,orig_nn.jpg
+# - merges 2 consecutive contours, and erodes them (to mimik bundles along the z axes), finds straight lines joining nodes
 #
 # Creates structures:
 # - nodes: [index, z, (x,y), width, [linked to], [linked - triangles], subgraph]
@@ -68,7 +69,7 @@ for idx, fname in enumerate(myslices):
     xxx = fname.find("_z0")
     zname = fname[xxx+3:xxx+5]+".jpg"
     zval = int(fname[xxx+3:xxx+5])
-    print("Outpur saved as "+zname)
+    print("Output saved as "+zname)
 
 
     print("Finding contours")
@@ -161,8 +162,8 @@ for idx, fname in enumerate(myslices):
         mask = np.zeros((markers1.shape[0], markers1.shape[1]), dtype=np.ubyte)
         cv2.drawContours(mask,contours1,i,1,cv2.FILLED)
         minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(dist1a, mask)
-        indnode = indnode + 1
         nodes.append([indnode,zval, maxLoc, int(maxVal), [], [],0])
+        indnode = indnode + 1
     totlines = []
     print("Found %s nodes" % len(nodes))
     for i in range(len(nodes)):
@@ -294,7 +295,7 @@ for idx, fname in enumerate(myslices):
     for node in nodes:
         cv2.circle(src, node[2], node[3]+1,(0,255,0),1)
         cv2.circle(src8out, node[2], node[3]+1,(255,0,0),1)
-        cv2.putText(src8out,str(node[0]),node[2], cv2.FONT_HERSHEY_PLAIN, 1,(0,0,0),1,cv2.LINE_AA)
+#        cv2.putText(src8out,str(node[0]),node[2], cv2.FONT_HERSHEY_PLAIN, 1,(0,0,0),1,cv2.LINE_AA) moved later for readability
     # delete from totlines the third edge of triangles if any, setting status=triang
         for idson in node[4]:
             if idson < node[0]:
@@ -327,35 +328,237 @@ for idx, fname in enumerate(myslices):
         for m in line['midi']:
             cv2.circle(src8out, m, 2,(0,255,0),-1)
             cv2.circle(src, m, 2,(0,255,0),-1)
-        nodes[line['ip2']-1][5].append(line['ip1glob'])
+        nodes[line['ip2']][5].append(line['ip1glob'])
         if line['ip1'] != last_node:
             if last_node != -1:
                 if link_no_tr:
-                    nodes[last_node-1][5].extend(link_no_tr)
+                    nodes[last_node][5].extend(link_no_tr)
             last_node = line['ip1']
             link_no_tr = []
         link_no_tr.append(line['ip2glob'])
     if last_node:
         if link_no_tr:
-            nodes[last_node-1][5].extend(link_no_tr)
+            nodes[last_node][5].extend(link_no_tr)
+
+    for node in nodes:
+        cv2.putText(src8out,str(node[0]),node[2], cv2.FONT_HERSHEY_PLAIN, 1,(0,0,0),1,cv2.LINE_AA)
 
     cv2.imwrite(contourdir+'orig_'+zname, src)
     cv2.imwrite(contourdir+zname, src8out)
 
+    alllines.extend(totlines)  # add edges found so far
+
     if not first_img:
-        print("calcolo edges fra immagine %s e %s" % (zval, zval-1))
-        # fare merge delle due immagini, calcolare i cammini fra tutti i nodi della prima e tutti quelli della seconda (stesso algoritmo usato per una sola img)
-        # alcolare le lunghezze dei cammini considerando anche la distanza fra le immagini depthz
-        # disegnare sul merge delle immagini nodi (con 2 colori diversi) e cammini
-        # aggiungere nodi e cammini alle strutture, verificare che la connessione dei grafi tenga conto anche di questi
+        print("computing edges between img %s and %s" % (zval, zval-1))
+        merged_image = np.zeros((src.shape[0], src.shape[1], 3), np.uint8)
+        merged_image[:,:] = (102,102,102)
+        kkk = np.ones((7,7),np.uint8)
+        mask = cv2.erode(prev_img, kkk, iterations=1) > 200
+        merged_image[mask] = 255
+        mask = cv2.erode(src8c, kkk, iterations=1) > 200
+        merged_image[mask] = 255
+        mergedout = np.copy(merged_image)
+
+        # 2 conotour images merged, compute edges between all nodes of the 1st and all node of the 2nd that stay within contours. Tolerance is reduced
+
+        totlines = []
+        for i in range(len(nodes)):
+            for k in range(len(prev_nodes)):
+                toler = 1
+                dd = math.sqrt(math.pow(nodes[i][2][0]-prev_nodes[k][2][0],2)+math.pow(nodes[i][2][1]-prev_nodes[k][2][1],2)) # 2D distance to check contours
+                minax = dd/18
+                nx = math.floor(dd/16)
+                lineok = True
+                circleok = False
+                midi_nodes = []
+                center = (int((nodes[i][2][0] + prev_nodes[k][2][0])/2), int((nodes[i][2][1] + prev_nodes[k][2][1])/2))
+                if nodes[i][2][0] == prev_nodes[k][2][0]:
+                    alpha = np.pi/2
+                else:
+                    alpha = math.atan2(nodes[i][2][1]-prev_nodes[k][2][1],nodes[i][2][0]-prev_nodes[k][2][0])
+                versus = 1
+                if nx > 0:
+                    if nodes[i][2][0] > prev_nodes[k][2][0]:
+                        inx = prev_nodes[k][2][0]
+                        iny = prev_nodes[k][2][1]
+                        dx = (nodes[i][2][0] - prev_nodes[k][2][0])/nx
+                        dy = (nodes[i][2][1] - prev_nodes[k][2][1])/nx
+                    else:
+                        inx = nodes[i][2][0]
+                        iny = nodes[i][2][1]
+                        dx = (prev_nodes[k][2][0] - nodes[i][2][0])/nx
+                        dy = (prev_nodes[k][2][1] - nodes[i][2][1])/nx
+                    for iix in range(nx):
+                        midi = (int(inx+dx*(iix+1)), int(iny+dy*(iix+1)))
+                        midi_nodes.append(midi)
+                        # test that points on the line are in the contour, with tolerance
+                        found = False
+                        for iir in range(-toler, toler+1):
+                            for iis in range(-toler, toler+1):
+                                a10 = merged_image[midi[1]+iir,midi[0]+iis,0]
+                                a11 = merged_image[midi[1]+iir,midi[0]+iis,1]
+                                a12 = merged_image[midi[1]+iir,midi[0]+iis,2]
+                                if (a10 == 255) and (a11 == 255) and (a12 == 255):
+                                # at least one point in the neighbour belongs to the contour
+                                    found = True
+                                    break
+                            if found == True:
+                                break
+                        if found == False:
+                        # NO points of the neighbor belong to the contour: discard the line
+                            lineok = False
+                            break
+                    # look for elliptical lines if the points are not too far from each other
+                    #  As the computation for 3D edes is veryu approximate, we do not consider elliptical edges
+                    if (lineok == False) and (dd <0):
+                        toler = 1
+                        for iid in range(1,10):
+                            minax = dd/18*iid
+                            lineok = True
+                            circleok = True
+                            midi_nodes = []
+                            tmp_nodes = cv2.ellipse2Poly(center,(int(dd/2),int(minax)),int(alpha*180/np.pi),0,180,20)
+                            for mmm in tmp_nodes:
+                                midi = (mmm[0], mmm[1])
+                                midi_nodes.append(midi)
+                                found = False
+                                for iir in range(-toler, toler+1):
+                                    for iis in range(-toler, toler+1):
+                                        a10 = merged_image[midi[1]+iir,midi[0]+iis,0]
+                                        a11 = merged_image[midi[1]+iir,midi[0]+iis,1]
+                                        a12 = merged_image[midi[1]+iir,midi[0]+iis,2]
+                                        if (a10 == 255) and (a11 == 255) and (a12 == 255):
+                                        # at least one point in the neighbour belongs to the contour
+                                            found = True
+                                            break
+                                    if found == True:
+                                        break
+                                if found == False:
+                                # NO points of the neighbor belong to the contour: discard the line
+                                    lineok = False
+                                    circleok = False
+                                    break
+                            if lineok == True:
+                                versus = 1
+                                break
+                            # the other half of the ellipse
+                            lineok = True
+                            circleok = True
+                            midi_nodes = []
+                            tmp_nodes = cv2.ellipse2Poly(center,(int(dd/2),int(minax)),int(alpha*180/np.pi),-180,0,20)
+                            for mmm in tmp_nodes:
+                                midi = (mmm[0], mmm[1])
+                                midi_nodes.append(midi)
+                                found = False
+                                for iir in range(-toler, toler+1):
+                                    for iis in range(-toler, toler+1):
+                                        a10 = merged_image[midi[1]+iir,midi[0]+iis,0]
+                                        a11 = merged_image[midi[1]+iir,midi[0]+iis,1]
+                                        a12 = merged_image[midi[1]+iir,midi[0]+iis,2]
+                                        if (a10 == 255) and (a11 == 255) and (a12 == 255):
+                                        # at least one point in the neighbour belongs to the contour
+                                            found = True
+                                            break
+                                    if found == True:
+                                        break
+                                if found == False:
+                                # NO points of the neighbor belong to the contour: discard the line
+                                    lineok = False
+                                    circleok = False
+                                    break
+                            if lineok == True:
+                                versus = -1
+                                break
+
+                if lineok == True:
+        # - lines: [(x,y) of P1, (x,y) of P2, length, index of P1, index of P2, width, [intermediate points], type, paramenters forr ellipses, status]
+                    wline = int((prev_nodes[k][3]+nodes[i][3])/2)
+                    if circleok == False:
+                        type = 'line'
+                        leng = math.sqrt(math.pow(nodes[i][2][0]-prev_nodes[k][2][0],2)+math.pow(nodes[i][2][1]-prev_nodes[k][2][1],2)+math.pow(deptz,2)) # 3D distance 
+                    else:
+                        type = 'ellipse'
+                        dd2 = leng = math.sqrt(math.pow(nodes[i][2][0]-prev_nodes[k][2][0],2)+math.pow(nodes[i][2][1]-prev_nodes[k][2][1],2)+math.pow(deptz,2)) 
+                        leng = np.pi * ( 3*(dd2/2+minax) - np.sqrt( (3*dd2/2 + minax) * (dd2/2 + 3*minax) ) ) / 2 # approxinate half perimeter
+                
+                    nodes[i][4].append(prev_nodes[k][0])
+                    allnodes[prev_nodes[k][0]-1][4].append(nodes[i][0])
+                    # update also the no-triangle list, as no check for triangles will be done
+                    nodes[i][5].append(prev_nodes[k][0])
+                    allnodes[prev_nodes[k][0]-1][5].append(nodes[i][0])
+                    totlines.append({'p1': nodes[i][2], 'p2': prev_nodes[k][2], 'len': leng, 'width': wline, 'ip1glob': nodes[i][0], 'ip2glob': prev_nodes[k][0], 'ip1': i, 'ip2':k, 'midi': midi_nodes, 'type': type, 'center': center, 'maxax': dd/2, 'minax': minax, 'alpha':alpha, 'versus': versus, 'status': 'ok', 'subgraph': 0})
+
+        print("Found %s lines" % len(totlines))
+
+        # draw nodes
+        for node in nodes:
+            cv2.circle(mergedout, node[2], node[3]+1,(255,0,0),1)
+        for node in prev_nodes:
+            cv2.circle(mergedout, node[2], node[3]+1,(0,0,255),1)
+#        cv2.putText(src8out,str(node[0]),node[2], cv2.FONT_HERSHEY_PLAIN, 1,(0,0,0),1,cv2.LINE_AA) moved later for readability
+### skip the triangle check for 3D edges
+        # delete from totlines the third edge of triangles if any, setting status=triang
+#            for idson in node[4]:
+#                if idson < node[0]:
+#                # do not consider nodes before the one at hand
+#                    continue
+#                son = next(nnn for nnn in nodes if nnn[0] == idson)
+#                for idgson in son[4]:
+#                    if idgson < son[0]:
+#                        continue              
+#                    if idgson in node[4]:
+#                        todelete = next(lll for lll in totlines if (lll['ip1glob'] ==node[0] and lll['ip2glob']==idgson) or (lll['ip2glob'] ==node[0] and lll['ip1glob']==idgson))
+#                        todelete['status'] = 'triang'
+
+        # draw edges, markers, etc. Write nodes links without triangles
+        last_node = -1
+        link_no_tr = []
+        for line in totlines:
+            if line['status'] == 'triang':
+                continue
+            if line['type'] == 'line':
+                cv2.line(mergedout,line['p1'],line['p2'],(0,255,0),1)
+            else:
+                if line['versus'] ==1:
+                    cv2.ellipse(mergedout,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,0,180,(0,255,0),1)
+                else:
+                    cv2.ellipse(mergedout,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,-180,0,(0,255,0),1)
+            for m in line['midi']:
+                cv2.circle(src8out, m, 2,(0,255,255),-1)
+## skip triangle check related section
+#            nodes[line['ip2']][5].append(line['ip1glob'])
+#            if line['ip1'] != last_node:
+#                if last_node != -1:
+#                    if link_no_tr:
+#                        nodes[last_node][5].extend(link_no_tr)
+#                last_node = line['ip1']
+#                link_no_tr = []
+#            link_no_tr.append(line['ip2glob'])
+#        if last_node:
+#            if link_no_tr:
+#                nodes[last_node][5].extend(link_no_tr)
+
+        for node in nodes:
+            cv2.putText(mergedout,str(node[0]),node[2], cv2.FONT_HERSHEY_PLAIN, 1,(0,0,0),1,cv2.LINE_AA)
+        for node in prev_nodes:
+            cv2.putText(mergedout,str(node[0]),node[2], cv2.FONT_HERSHEY_PLAIN, 1,(0,0,0),1,cv2.LINE_AA)
+        zeri = "00"
+        pp=str(zval-1).strip()
+        pp = zeri[:2-len(pp)]+pp
+        cv2.imwrite(contourdir+pp+"-"+zname, mergedout)
+        alllines.extend(totlines)
+
+
     first_img = False
     prev_img = np.copy(src8c)
     prev_nodes = np.copy(nodes)
     allnodes.extend(nodes)
-    alllines.extend(totlines)
 
 # computation of global structures    
 # compute connected subgraphs, and store to nodes and edges. -1 means not connected to anything
+
+print("Total nodes found: %s" % len(allnodes))
+print("Total lines found: %s" % len(alllines))
     
 subgr = 1
 for node in allnodes:
@@ -364,23 +567,37 @@ for node in allnodes:
         continue
     if node[6] != 0:
     # already computed from a previous node, copy to linked nodes
-        nds = []     
-        for nn in node[5]:
-            if nn > node[0]:
-                nds.append(nn)
-        while nds:
-            nds1 = []
-            for nn in nds:
-                allnodes[nn-1][6] = node[6]
-                for nn1 in allnodes[nn-1][5]:
-                    if (nn1 > allnodes[nn-1][0] or allnodes[nn1-1][6]!=node[6]) and nn1 not in nds1:
-                        nds1.append(nn1)
-            nds = nds1
         continue
+#        nds = []     
+#        for nn in node[5]:
+#            if nn > node[0]:
+#                nds.append(nn)
+#        while nds:
+#            print("Adding %s nodes" % len(nds))
+#            nds1 = []
+#            for nn in nds:
+#                allnodes[nn-1][6] = node[6]
+#                for nn1 in allnodes[nn-1][5]:
+#                    if (nn1 > allnodes[nn-1][0] or allnodes[nn1-1][6]!=node[6]) and nn1 not in nds1:
+#                        nds1.append(nn1)
+#            nds = nds1
+            
+#        continue
     node[6] = subgr
+    print("New subgraph %s" % subgr)
+    nds = []     
     for nn in node[5]:
         if nn > node[0]:
-             allnodes[nn-1][6] = node[6]
+            nds.append(nn)
+    while nds:
+        print("Adding %s nodes" % len(nds))
+        nds1 = []
+        for nn in nds:
+            allnodes[nn-1][6] = node[6]
+            for nn1 in allnodes[nn-1][5]:
+                if (nn1 > allnodes[nn-1][0] or allnodes[nn1-1][6]!=node[6]) and nn1 not in nds1:
+                    nds1.append(nn1)
+        nds = nds1
     subgr = subgr+1    
 
 for line in alllines:
