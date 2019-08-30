@@ -15,6 +15,7 @@ nodes = list(csv.reader(open('data/nodes.csv'), delimiter=","))
 edges = list(csv.reader(open('data/edges.csv'), delimiter=","))
 
 mynodes = []
+indnodes = []
 myedges = {}
 
 loading = False
@@ -28,6 +29,7 @@ for node in nodes:
     if node[7].strip() != subgraph:
         continue
     mynodes.append([node[0],node[1],node[2],node[3],node[6],True])
+    indnodes.append(node[0])
     nnodes = nnodes + 1
 
 print("I consider %s nodes" % nnodes)
@@ -44,14 +46,20 @@ for edge in edges:
         continue
     if edge[9].strip() != subgraph:
         continue
-    key = str(edge[6]).strip()+'-'+str(edge[7]).strip()
+    key = edge[6].strip()+'-'+edge[7].strip()
     l_edge = 0
     try:
         l_edge = float(edge[5])
     except:
         print("Lenght error for edge %s - %s" % (edge[6],edge[7]))
         pass
-    myedges[key] = [edge[6],edge[7],l_edge,True]
+    l_width = 0
+    try:
+        l_width = float(edge[4])
+    except:
+        print("Widht error for edge %s - %s" % (edge[6],edge[7]))
+        pass
+    myedges[key] = [edge[6],edge[7],l_edge,True,l_width]
     nedges = nedges + 1
 
 print("I consider %s edges" % nedges)
@@ -59,6 +67,7 @@ print("I consider %s edges" % nedges)
 for node in mynodes:
     linked = node[4].split()
     if len(linked) == 1:
+        continue # skip this
     # if the node is linked just to another, it is a free end of its edge, we are not interested in it and we flag the edge setting its starting point to zero
         key = str(node[0]).strip()+'-'+node[4].strip()
         if key in myedges:
@@ -67,8 +76,11 @@ for node in mynodes:
             key = node[4].strip()+'-'+str(node[0]).strip()
             if key in myedges:
                 myedges[key][1] = 0
+            else:
+                print("edge not found between %s and %s" % (node[0],node[4]))
         continue
     if len(linked) == 2:
+        continue  # skip the following, as we ant to keep also this kind of nodes, that may appear e.g. in loops
         node[5] = False  # DON'T consider this node
         l_edge = 0
         key = str(node[0]).strip()+'-'+linked[0].strip()
@@ -99,6 +111,27 @@ for node in mynodes:
                 myedges[key]=[linked[0].strip(),linked[1].strip(),l_edge,True]
             else:
                 myedges[key1]=[linked[1].strip(),linked[0].strip(),l_edge,True]
+        # remove links to the deleted node nad replace with mutual links between the 2 joined nodes
+        pp1 = indnodes.index(linked[0].strip())
+        ll1=mynodes[pp1][4].split()
+        pp2=ll1.index(node[0])
+        ll1.pop(pp2)
+        ll1.append(linked[1])
+        ss = ""
+        for s in ll1:
+            ss = ss + s + " "
+        mynodes[pp1][4] = ss.strip()
+
+        pp1 = indnodes.index(linked[1].strip())
+        ll1=mynodes[pp1][4].split()
+        pp2=ll1.index(node[0])
+        ll1.pop(pp2)
+        ll1.append(linked[0])
+        ss = ""
+        for s in ll1:
+            ss = ss + s + " "
+        mynodes[pp1][4] = ss.strip()
+
 
 nnodes = 0
 buf=io.StringIO()
@@ -121,12 +154,12 @@ print("I am saving %s nodes" % nnodes)
 nedges = 0
 buf1=io.StringIO()
 writer1=csv.writer(buf1, quoting=csv.QUOTE_NONNUMERIC, delimiter=",")
-writer1.writerow(['id', 'P1', 'P2', 'length'])
+writer1.writerow(['id', 'P1', 'P2', 'length','width'])
 
 for key in myedges:
     edge = myedges[key]
     if edge[3] == True:
-        writer1.writerow([key,edge[0],edge[1],edge[2]])
+        writer1.writerow([key,edge[0],edge[1],edge[2],edge[4]])
         nedges = nedges+1
 
 text_file1 = open("data/edges_ok.csv", "w")
