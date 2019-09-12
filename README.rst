@@ -31,4 +31,6 @@ create_contour_param4.py seems the best of these test programs and will be exten
 
 - create_all.py; applies the same trnsformations of create_contour_param4.py to all the slices, builds an xls file with the structure (nodes and edges)
 
+- create_contour_electrodes.py: test program to set a grid of circular electrodes onto an image
+
 TBD: merge edges when they run parallel, erase nodes linked to 2 other only, add nodes when edges are merged. One could check that an edge reached a node (e.g. drawing the node in full blue), and stop the edge at this point; check that an edge meets another if there is a "green point" within the threshold, and add a new node there; in a similar way one could check that 2 edges run parallel etc.
