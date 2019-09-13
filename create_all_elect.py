@@ -54,7 +54,7 @@ else:
 
 
 if not optlist.threshold_value:
-    print("Using default threshold value %s ", threshold_value)
+    print("Using default threshold value %s " % threshold_value)
 else:
     threshold_value=float(optlist.threshold_value)
 
@@ -70,12 +70,12 @@ color = (255, 255, 255)
 elect = []
 for k in range(5):
     for i in range(6):
-        # slice 0
-        if im_elect == 0:
-            if k==0 and i in (0,5):
-                continue
-            elif k==4 and i in (0, 4, 5):
-                continue
+        # slice 0: it is useless to skip positions: if they do not touch any bundle they are not considered
+        #if im_elect == 0:
+        #    if k==0 and i in (0,5):
+        #        continue
+        #    elif k==4 and i in (0, 4, 5):
+        #        continue
         elect.append(((65+k*30)*pix,(50+i*30)*pix))
 
 
@@ -195,11 +195,13 @@ for idx, fname in enumerate(myslices):
         if zval == im_elect:
         # check if the node is an electrode and mark it
             for ele in elect:
-                if math.sqrt(math.pow(maxLoc[0]-ele[0],2)+math.pow(maxLoc[1]-ele[1],2))<= radius:
+                if math.sqrt(math.pow(maxLoc[0]-int(ele[1]),2)+math.pow(maxLoc[1]-int(ele[0]),2))<= radius:
                     typnode = "E"
                     break
                 else:
                     typnode = "N"
+        else:
+            typnode = "N"
         nodes.append([indnode,zval, maxLoc, int(maxVal), [], [],0,typnode])
         indnode = indnode + 1
     totlines = []
@@ -316,7 +318,13 @@ for idx, fname in enumerate(myslices):
 
             if lineok == True:
     # - lines: [(x,y) of P1, (x,y) of P2, length, index of P1, index of P2, width, [intermediate points], type, paramenters forr ellipses, status]
-                wline = int((nodes[k][3]+nodes[i][3])/2)
+    #          width is estimated as average width of its endpoints if neither is an electrode; the non-electrode end width otherwise
+                if nodes[k][7] == 'E':
+                    wline = int(nodes[i][3])
+                elif nodes[i][7] == 'E':
+                    wline = int(nodes[k][3])
+                else:
+                    wline = int((nodes[k][3]+nodes[i][3])/2)
                 if circleok == False:
                     type = 'line'
                     leng = dd  # distance of the 2 points
@@ -341,17 +349,15 @@ for idx, fname in enumerate(myslices):
             if idson < node[0]:
             # do not consider nodes before the one at hand
                 continue
-#            print(idson)
-#            if len(nodes[idson])<8:
-#                print(nodes(idson))
-#            if nodes[idson][7] == "E":
-#                continue  # always leave there the electrodes
             son = next(nnn for nnn in nodes if nnn[0] == idson)
+            if son[7] == "E":
+                continue  # always leave there the electrodes
             for idgson in son[4]:
                 if idgson < son[0]:
                     continue              
-#                if nodes[idgson][7] == "E":
-#                    continue  # always leave there the electrodes
+                gson = next(nnn for nnn in nodes if nnn[0] == idgson)
+                if gson[7] == "E":
+                    continue  # always leave there the electrodes
                 if idgson in node[4]:
                     todelete = next(lll for lll in totlines if (lll['ip1glob'] ==node[0] and lll['ip2glob']==idgson) or (lll['ip2glob'] ==node[0] and lll['ip1glob']==idgson))
                     todelete['status'] = 'triang'
