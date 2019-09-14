@@ -41,7 +41,7 @@ for node in nodes:
         continue
     if node[7].strip() != subgraph:
         continue
-    mynodes.append([node[0],node[1],node[2],node[3],node[6],True,node[8]])
+    mynodes.append([node[0],node[1],node[2],node[3],node[6],True,node[8],node[9]])
     indnodes.append(node[0])
     nnodes = nnodes + 1
 
@@ -149,11 +149,11 @@ for node in mynodes:
 nnodes = 0
 buf=io.StringIO()
 writer=csv.writer(buf, quoting=csv.QUOTE_NONNUMERIC, delimiter=",")
-writer.writerow(['id', 'z', 'x', 'y', 'nodes linked', 'type'])
+writer.writerow(['id', 'z', 'x', 'y', 'nodes linked', 'type', 'el.name'])
 
 for node in mynodes:
     if node[5] == True:
-        writer.writerow([node[0],node[1],node[2],node[3],node[4],node[6]])
+        writer.writerow([node[0],node[1],node[2],node[3],node[4],node[6],node[7]])
         nnodes = nnodes+1
 
 #out=base64.encodestring(buf.getvalue())
