@@ -26,11 +26,11 @@ import xlwt
 # Widh of a line = average width of the nodes it joins
 # Parameters
 # -I image name in slices directory
-# -T threshold value (default = 80
+# -T threshold value (default = 80, use 70 for slide 0)
 
 
 
-threshold_value = 80   # can be adjusted depending on acutal images
+threshold_value = 80   # 70 for slide 0 # can be adjusted depending on acutal images
 pix = 1024 / 250 # 250 micron in 1024 pixels
 deptz = int(pix*110 / 29) # hypothetical number of pixels between 2 images: 29 images in 110 micron
 
@@ -76,7 +76,8 @@ for k in range(5):
         #        continue
         #    elif k==4 and i in (0, 4, 5):
         #        continue
-        elect.append(((65+k*30)*pix,(50+i*30)*pix,str(k+1)+str(i+1)))
+        # x and y, electrode name, place to store node's id
+        elect.append([(65+k*30)*pix,(50+i*30)*pix,str(k+1)+str(i+1),-1])
         # name: 1st digit = column (1-5) + row (1-6)
 
 
@@ -178,7 +179,6 @@ for idx, fname in enumerate(myslices):
     # Draw the background marker
     cv2.circle(markers1, (5,5), 3, (255,255,255), -1)
 
-
     print("Drawing circles in markers (contour/nn.jpg, contour/orig_nn.jpg)")
     src8c = blank_image2
     src8out = np.copy(blank_image2)
@@ -199,6 +199,7 @@ for idx, fname in enumerate(myslices):
                 if math.sqrt(math.pow(maxLoc[0]-int(ele[1]),2)+math.pow(maxLoc[1]-int(ele[0]),2))<= radius:
                     typnode = "E"
                     namnode = ele[2]
+                    ele[3] = indnode
                     break
                 else:
                     typnode = "N"
@@ -208,6 +209,14 @@ for idx, fname in enumerate(myslices):
             namnode = ""
         nodes.append([indnode,zval, maxLoc, int(maxVal), [], [],0,typnode,namnode])
         indnode = indnode + 1
+    # ensure that all the electrodes have an associated node
+    if zval == im_elect:
+        for ele in elect:
+            if ele[3] == -1:
+            # assign a node to this electrode that has been skipped
+                nodes.append([indnode,zval, (int(ele[1]),int(ele[0])), int(radius), [], [],0,"E",ele[2]])
+                ele[3] =indnode
+                indnode = indnode + 1
     totlines = []
     print("Found %s nodes" % len(nodes))
     for i in range(len(nodes)):
@@ -434,6 +443,11 @@ for idx, fname in enumerate(myslices):
 
         totlines = []
         for i in range(len(nodes)):
+        # if the electrodes are not in the 1st slide, we connect nodes of the slide before the one with electrodes only to electrodes
+        # for slides far from the electrodes we manage all potential connections as usual
+            if zval == im_elect:
+                if nodes[i][7] != "E":
+                    continue
             for k in range(len(prev_nodes)):
                 toler = 1
                 dd = math.sqrt(math.pow(nodes[i][2][0]-prev_nodes[k][2][0],2)+math.pow(nodes[i][2][1]-prev_nodes[k][2][1],2)) # 2D distance to check contours
