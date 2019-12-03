@@ -366,7 +366,7 @@ for idx, fname in enumerate(myslices):
 
     # draw nodes
     for node in nodes:
-        cv2.circle(src, node[2], node[3]+1,(0,255,0),1)
+        cv2.circle(src, node[2], node[3]+1,(255,255,255),1)
         cv2.circle(src8out, node[2], node[3]+1,(255,0,0),1)
 #        cv2.putText(src8out,str(node[0]),node[2], cv2.FONT_HERSHEY_PLAIN, 1,(0,0,0),1,cv2.LINE_AA) moved later for readability
     # delete from totlines the third edge of triangles if any, setting status=triang
@@ -397,17 +397,17 @@ for idx, fname in enumerate(myslices):
             continue
         if line['type'] == 'line':
             cv2.line(src8out,line['p1'],line['p2'],(0,0,255),2)
-            cv2.line(src,line['p1'],line['p2'],(0,255,0),2)
+            cv2.line(src,line['p1'],line['p2'],(255,255,255),2)
         else:
             if line['versus'] ==1:
                 cv2.ellipse(src8out,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,0,180,(0,0,255),2)
-                cv2.ellipse(src,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,0,180,(0,255,0),2)
+                cv2.ellipse(src,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,0,180,(255,255,255),2)
             else:
                 cv2.ellipse(src8out,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,-180,0,(0,0,255),2)
-                cv2.ellipse(src,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,-180,0,(0,255,0),2)
+                cv2.ellipse(src,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,-180,0,(255,255,255),2)
         for m in line['midi']:
             cv2.circle(src8out, m, 2,(0,255,0),-1)
-            cv2.circle(src, m, 2,(0,255,0),-1)
+            cv2.circle(src, m, 2,(255,255,255),-1)
         nodes[line['ip2']][5].append(line['ip1glob'])
         if line['ip1'] != last_node:
             if last_node != -1:
