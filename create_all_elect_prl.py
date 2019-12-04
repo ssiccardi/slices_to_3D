@@ -31,7 +31,8 @@ import xlwt
 
 
 threshold_value = 80   # can be adjusted depending on acutal images
-deptz = 50 # hypothetical number of pixels between 2 images
+pix = 1024 / 250 # 250 micron in 1024 pixels
+deptz = int(pix*110 / 29) # hypothetical number of pixels between 2 images: 29 images in 110 micron
 
 slicedir = "Zslices/"
 graydir = "gray/"
@@ -41,10 +42,19 @@ datadir = "data/"
 parser = OptionParser()
 parser.add_option("-T", "--thvalue", dest="threshold_value",metavar="TH_VALUE",
                   help="Choose Threshold value")
+parser.add_option("-N", "--nimage", dest="im_elect",
+                  help="Choose Image Number holding electrodes")
 (optlist, args) = parser.parse_args()
 
+if not optlist.im_elect:
+	errmsg='This programs needs the number of the image holding electrodes as a command line argument'
+	raise SyntaxError(errmsg)
+else:
+    im_elect = int(optlist.im_elect)
+
+
 if not optlist.threshold_value:
-    print("Using default threshold value %s ", threshold_value)
+    print("Using default threshold value %s " % threshold_value)
 else:
     threshold_value=float(optlist.threshold_value)
 
@@ -53,7 +63,22 @@ myslices = sorted(glob.glob(slicedir+'/*.png'))
 indnode = 1  # Node index and structures, common to all images
 allnodes = []
 alllines = []
-xlsname = "network.xls"
+xlsname = "network_"+str(im_elect)+".xls"
+
+radius = int(pix * 5) # 250 micron in 1024 pixels
+color = (255, 255, 255)
+elect = []
+for k in range(5):
+    for i in range(6):
+        # slice 0: it is useless to skip positions: if they do not touch any bundle they are not considered
+        #if im_elect == 0:
+        #    if k==0 and i in (0,5):
+        #        continue
+        #    elif k==4 and i in (0, 4, 5):
+        #        continue
+        elect.append(((65+k*30)*pix,(50+i*30)*pix,str(k+1)+str(i+1)))
+        # name: 1st digit = column (1-5) + row (1-6)
+
 
 prev_img = None
 prev_nodes = None
@@ -67,7 +92,7 @@ for idx, fname in enumerate(myslices):
         raise SyntaxError(errmsg)
 
     xxx = fname.find("_z0")
-    zname = fname[xxx+3:xxx+5]+".jpg"
+    zname = fname[xxx+3:xxx+5]+"_el"+str(im_elect)+".jpg"
     zval = int(fname[xxx+3:xxx+5])
     print("Output saved as "+zname)
 
@@ -80,6 +105,9 @@ for idx, fname in enumerate(myslices):
     imgray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
 
     ret, thresh2 = cv2.threshold(imgray, threshold_value, 255, cv2.THRESH_BINARY_INV)
+#    if zval == im_elect:
+#        for i in range(len(elect)):
+#            cv2.circle(thresh2, (int(elect[i][1]), int(elect[i][0])), radius,(255, 255, 255),-1)  #max(int(radius),1), color, -1)
     contours2, hierarchy2 = cv2.findContours(thresh2, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     blank_image2 = np.zeros((src.shape[0], src.shape[1], 3), np.uint8)
@@ -108,6 +136,9 @@ for idx, fname in enumerate(myslices):
     bw1 = cv2.cvtColor(blank_image2, cv2.COLOR_BGR2GRAY)
     _, bw1 = cv2.threshold(bw1, threshold_value, 255, cv2.THRESH_BINARY)# | cv2.THRESH_OTSU)
 
+    if zval == im_elect:
+        for i in range(len(elect)):
+            cv2.circle(bw1, (int(elect[i][1]), int(elect[i][0])), radius,(255, 255, 255),-1)  #max(int(radius),1), color, -1)
 
 
     #cv2.imwrite(contourdir+'example8b.jpg', bw1)
@@ -162,7 +193,20 @@ for idx, fname in enumerate(myslices):
         mask = np.zeros((markers1.shape[0], markers1.shape[1]), dtype=np.ubyte)
         cv2.drawContours(mask,contours1,i,1,cv2.FILLED)
         minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(dist1a, mask)
-        nodes.append([indnode,zval, maxLoc, int(maxVal), [], [],0])
+        if zval == im_elect:
+        # check if the node is an electrode and mark it
+            for ele in elect:
+                if math.sqrt(math.pow(maxLoc[0]-int(ele[1]),2)+math.pow(maxLoc[1]-int(ele[0]),2))<= radius:
+                    typnode = "E"
+                    namnode = ele[2]
+                    break
+                else:
+                    typnode = "N"
+                    namnode = ""
+        else:
+            typnode = "N"
+            namnode = ""
+        nodes.append([indnode,zval, maxLoc, int(maxVal), [], [],0,typnode,namnode])
         indnode = indnode + 1
     totlines = []
     print("Found %s nodes" % len(nodes))
@@ -278,13 +322,33 @@ for idx, fname in enumerate(myslices):
 
             if lineok == True:
     # - lines: [(x,y) of P1, (x,y) of P2, length, index of P1, index of P2, width, [intermediate points], type, paramenters forr ellipses, status]
-                wline = int((nodes[k][3]+nodes[i][3])/2)
+    #          width is estimated as average width of its endpoints if neither is an electrode; the non-electrode end width otherwise
+                l_corr = 0   # we subtract the electrode's radius from the line length, but if the resulting length is <=0 we adjust it somehow
+                if nodes[k][7] == 'E':
+                    wline = int(nodes[i][3])
+                    l_corr = l_corr + radius
+                elif nodes[i][7] == 'E':
+                    wline = int(nodes[k][3])
+                    l_corr = l_corr + radius
+                else:
+                    wline = int((nodes[k][3]+nodes[i][3])/2)
+                if nodes[k][7] == 'E' and nodes[i][7] == 'E':
+                    l_corr = radius * 2
                 if circleok == False:
                     type = 'line'
-                    leng = dd  # distance of the 2 points
+                    leng = dd - l_corr # distance of the 2 points
+                    if leng <=0:
+                        leng = dd - l_corr
+                    if leng <=0:
+                        leng = dd
                 else:
                     type = 'ellipse'
-                    leng = np.pi * ( 3*(dd/2+minax) - np.sqrt( (3*dd/2 + minax) * (dd/2 + 3*minax) ) ) / 2 # approxinate half perimeter
+                    ltemp = np.pi * ( 3*(dd/2+minax) - np.sqrt( (3*dd/2 + minax) * (dd/2 + 3*minax) ) ) / 2 # approxinate half perimeter
+                    leng = ltemp - l_corr
+                    if leng <=0:
+                        leng = ltemp - l_corr
+                    if leng <=0:
+                        leng = ltemp
                 
                 nodes[i][4].append(nodes[k][0])
                 nodes[k][4].append(nodes[i][0])
@@ -297,14 +361,21 @@ for idx, fname in enumerate(myslices):
         cv2.circle(src8out, node[2], node[3]+1,(255,0,0),1)
 #        cv2.putText(src8out,str(node[0]),node[2], cv2.FONT_HERSHEY_PLAIN, 1,(0,0,0),1,cv2.LINE_AA) moved later for readability
     # delete from totlines the third edge of triangles if any, setting status=triang
+        if node[7] == "E":
+            continue  # always leave there the electrodes
         for idson in node[4]:
             if idson < node[0]:
             # do not consider nodes before the one at hand
                 continue
             son = next(nnn for nnn in nodes if nnn[0] == idson)
+            if son[7] == "E":
+                continue  # always leave there the electrodes
             for idgson in son[4]:
                 if idgson < son[0]:
                     continue              
+                gson = next(nnn for nnn in nodes if nnn[0] == idgson)
+                if gson[7] == "E":
+                    continue  # always leave there the electrodes
                 if idgson in node[4]:
                     todelete = next(lll for lll in totlines if (lll['ip1glob'] ==node[0] and lll['ip2glob']==idgson) or (lll['ip2glob'] ==node[0] and lll['ip1glob']==idgson))
                     todelete['status'] = 'triang'
@@ -327,7 +398,7 @@ for idx, fname in enumerate(myslices):
                 cv2.ellipse(src,line['center'],(int(line['maxax']),int(line['minax'])),line['alpha']*180/np.pi,-180,0,(255,255,255),2)
         for m in line['midi']:
             cv2.circle(src8out, m, 2,(0,255,0),-1)
-            cv2.circle(src, m, 2,(255,255,255),-1)
+            cv2.circle(src, m, 2,(0,255,0),-1)
         nodes[line['ip2']][5].append(line['ip1glob'])
         if line['ip1'] != last_node:
             if last_node != -1:
@@ -616,6 +687,8 @@ worksheet.write(1,4,"Width")
 worksheet.write(1,5,"Is linked to")
 worksheet.write(1,6,"Excluding triangles")
 worksheet.write(1,7,"Subgraph")
+worksheet.write(1,8,"Type")
+worksheet.write(1,9,"El.name")
 i = 2
 for nn in allnodes:
     worksheet.write(i,0,nn[0])
@@ -632,6 +705,8 @@ for nn in allnodes:
         ss = ss + "%s " % nni
     worksheet.write(i,6,ss)
     worksheet.write(i,7,nn[6])
+    worksheet.write(i,8,nn[7])
+    worksheet.write(i,9,nn[8])
     i = i + 1
     
 worksheet = workbook.add_sheet('Edges')
